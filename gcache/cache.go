@@ -3,7 +3,7 @@ package gcache
 import (
 	"sync"
 
-	"github.com/yygqzzk/gCache/gcache/lru"
+	"github.com/yygqzzk/gCache/lru"
 )
 
 type cache struct {
