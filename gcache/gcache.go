@@ -48,7 +48,7 @@ func NewGroup(name string, cacheBytes int64, getter Getter) *Group {
 
 func GetGroup(name string) *Group {
 	mu.RLock()
-	defer mu.Unlock()
+	defer mu.RUnlock()
 	if g, exists := groups[name]; exists {
 		return g
 	}
