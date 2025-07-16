@@ -77,6 +77,7 @@ func (p *HttpPool) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// 为服务设置新节点
 func (p *HttpPool) Set(peers ...string) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -87,6 +88,19 @@ func (p *HttpPool) Set(peers ...string) {
 	for _, peer := range peers {
 		p.httpGetters[peer] = &httpGetter{baseURL: peer + p.basePath}
 	}
+}
+
+func (p *HttpPool) PickPeer(key string) (PeerGetter, bool) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	if peer := p.peers.Get(key); peer != "" && peer != p.self {
+		p.Log("Pick peer %s", peer)
+		return p.httpGetters[peer], true
+	}
+
+	return nil, false
+
 }
 
 type httpGetter struct {
