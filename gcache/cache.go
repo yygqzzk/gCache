@@ -1,9 +1,9 @@
 package gcache
 
 import (
-	"sync"
-
 	"github.com/yygqzzk/gCache/lru"
+
+	"sync"
 )
 
 type cache struct {

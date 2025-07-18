@@ -2,6 +2,7 @@ package gcache
 
 import (
 	"fmt"
+	"github.com/yygqzzk/gCache/singleflight"
 	"log"
 	"sync"
 )
@@ -23,6 +24,8 @@ type Group struct {
 	getter    Getter
 	mainCache cache
 	peers     PeerPicker
+	// 使用singleflight 解决缓存击穿
+	loader *singleflight.Group
 }
 
 var (
@@ -43,6 +46,7 @@ func NewGroup(name string, cacheBytes int64, getter Getter) *Group {
 		mainCache: cache{
 			cacheBytes: cacheBytes,
 		},
+		loader: &singleflight.Group{},
 	}
 	groups[name] = g
 	return g
@@ -94,17 +98,24 @@ func (g *Group) RegisterPeer(peers PeerPicker) {
 
 func (g *Group) load(key string) (value ByteView, err error) {
 
-	if g.peers != nil {
-		// 分发到其他节点进行查询
-		if peer, ok := g.peers.PickPeer(key); ok {
-			if value, err = g.getFromPeer(peer, key); err == nil {
-				return value, nil
+	byteView, err := g.loader.Do(key, func() (interface{}, error) {
+		if g.peers != nil {
+			// 分发到其他节点进行查询
+			if peer, ok := g.peers.PickPeer(key); ok {
+				if value, err = g.getFromPeer(peer, key); err == nil {
+					return value, nil
+				}
+				log.Println("[gCache] Failed to get from peer:", err)
 			}
-			log.Println("[gCache] Failed to get from peer:", err)
 		}
+		// 其他节点无法处理，由当前节点处理
+		return g.getLocally(key)
+	})
+
+	if err != nil {
+		return byteView.(ByteView), err
 	}
-	// 其他节点无法处理，由当前节点处理
-	return g.getLocally(key)
+	return
 }
 
 func (g *Group) getFromPeer(peer PeerGetter, key string) (ByteView, error) {
