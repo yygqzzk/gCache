@@ -6,7 +6,7 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/yygqzzk/gCache/gcache"
+	"github.com/yygqzzk/gCache/gCache"
 )
 
 var db = map[string]string{
@@ -15,8 +15,8 @@ var db = map[string]string{
 	"Sam":  "567",
 }
 
-func createGroup() *gcache.Group {
-	return gcache.NewGroup("scores", 2<<10, gcache.GetterFunc(
+func createGroup() *gCache.Group {
+	return gCache.NewGroup("scores", 2<<10, gCache.GetterFunc(
 		func(key string) ([]byte, error) {
 			log.Println("[SlowDB] search key", key)
 			if v, ok := db[key]; ok {
@@ -27,15 +27,15 @@ func createGroup() *gcache.Group {
 	))
 }
 
-func startCacheServer(addr string, addrs []string, group *gcache.Group) {
-	peers := gcache.NewHttpPool(addr)
+func startCacheServer(addr string, addrs []string, group *gCache.Group) {
+	peers := gCache.NewHttpPool(addr)
 	peers.Set(addrs...)
 	group.RegisterPeer(peers)
 	log.Println("gCache is running at ", addr)
 	log.Fatal(http.ListenAndServe(addr[7:], peers))
 }
 
-func startAPIServer(apiAddr string, group *gcache.Group) {
+func startAPIServer(apiAddr string, group *gCache.Group) {
 	http.Handle("/api", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		key := r.URL.Query().Get("key")
 		view, err := group.Get(key)

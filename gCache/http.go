@@ -1,24 +1,27 @@
-package gcache
+package gCache
 
 import (
 	"fmt"
 	"github.com/yygqzzk/gCache/consistentHash"
+	pb "github.com/yygqzzk/gCache/proto"
+	"google.golang.org/protobuf/proto"
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 )
 
 const (
-	defaultBasePath = "/gcache/"
+	defaultBasePath = "/gCache/"
 	defaultReplicas = 50
 )
 
 type HttpPool struct {
 	// 用来记录自身的地址，包括主机名/IP 和端口。
 	self string
-	// 作为节点间通讯地址的前缀，默认是 /gcache/。
+	// 作为节点间通讯地址的前缀，默认是 /gCache/。
 	basePath string
 
 	mu sync.Mutex
@@ -45,7 +48,7 @@ func (p *HttpPool) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	p.Log("%s %s", r.Method, r.URL.Path)
 
-	// path格式： /gcache/groupName/key
+	// path格式： /gCache/groupName/key
 
 	parts := strings.SplitN(r.URL.Path[len(p.basePath):], "/", 2)
 	if len(parts) != 2 {
@@ -68,9 +71,14 @@ func (p *HttpPool) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	body, err := proto.Marshal(&pb.Response{Data: view.ByteSlice()})
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 	w.Header().Set("Content-Type", "application/octet-stream")
 
-	_, err = w.Write(view.ByteSlice())
+	_, err = w.Write(body)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -108,11 +116,11 @@ type httpGetter struct {
 	baseURL string
 }
 
-func (h *httpGetter) Get(group, key string) ([]byte, error) {
-	u := fmt.Sprintf("%v%v/%v", h.baseURL, group, key)
+func (h *httpGetter) Get(req *pb.Request, rsp *pb.Response) error {
+	u := fmt.Sprintf("%v%v/%v", h.baseURL, url.QueryEscape(req.GetGroup()), url.QueryEscape(req.GetKey()))
 	res, err := http.Get(u)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	defer func(Body io.ReadCloser) {
 		err := Body.Close()
@@ -122,14 +130,18 @@ func (h *httpGetter) Get(group, key string) ([]byte, error) {
 	}(res.Body)
 
 	if res.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("server returned: %s", res.Status)
+		return fmt.Errorf("server returned: %s", res.Status)
 	}
 
 	bytes, err := io.ReadAll(res.Body)
 	if err != nil {
-		return nil, fmt.Errorf("reading response body err: %s", err)
+		return fmt.Errorf("reading response body err: %s", err)
 	}
-	return bytes, err
+
+	if err = proto.Unmarshal(bytes, rsp); err != nil {
+		return fmt.Errorf("unmarshal response err: %s", err)
+	}
+	return nil
 }
 
 var _ PeerGetter = (*httpGetter)(nil)

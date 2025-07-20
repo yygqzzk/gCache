@@ -1,4 +1,4 @@
-package gcache
+package gCache
 
 // ByteView 只读数据
 type ByteView struct {

@@ -1,7 +1,8 @@
-package gcache
+package gCache
 
 import (
 	"fmt"
+	pb "github.com/yygqzzk/gCache/proto"
 	"github.com/yygqzzk/gCache/singleflight"
 	"log"
 	"sync"
@@ -119,9 +120,14 @@ func (g *Group) load(key string) (value ByteView, err error) {
 }
 
 func (g *Group) getFromPeer(peer PeerGetter, key string) (ByteView, error) {
-	bytes, err := peer.Get(g.name, key)
+	req := &pb.Request{
+		Group: g.name,
+		Key:   key,
+	}
+	rsp := &pb.Response{}
+	err := peer.Get(req, rsp)
 	if err != nil {
 		return ByteView{}, err
 	}
-	return ByteView{b: bytes}, nil
+	return ByteView{b: rsp.Data}, nil
 }
